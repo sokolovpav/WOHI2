@@ -1,0 +1,16 @@
+{
+  "name": "wohi2",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "keywords": ["express", "uef"],
+  "author": "pavel",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}
