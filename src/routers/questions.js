@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-
+const prisma = require("../lib/prisma");
 const questions = require("../data/questions")
 
 //  GET /api/questions
