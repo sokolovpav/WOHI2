@@ -1,17 +1,22 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require("../lib/prisma");
-const questions = require("../data/questions")
 
 //  GET /api/questions
-router.get("/", (req, res) => {
+router.get("/", async (req, res) => {
+    const questions = await prisma.question.findMany({
+      orderBy: { id: "asc" },
+    });
     res.json(questions);
 });
 
 //  GET /api/questions/:questId
-router.get("/:questId", (req,res) => {
+router.get("/:questId", async (req,res) => {
     const questId = Number(req.params.questId);
-    const question = questions.find(q=>q.id === questId);
+    const question = await prisma.question.findUnique({
+    where: { id: questId }
+  });
+
     if(!question){
         return res.status(404).json({msg: "Question not found"})
     }
@@ -19,27 +24,27 @@ router.get("/:questId", (req,res) => {
 });
 
 // POST /api/questions
-router.post("/", (req,res) => {
+router.post("/", async (req,res) => {
     const {question, answer} = req.body;
     if(!question || !answer){
         return res.status(400).json({msg: "Question and answer are required"})
     }
 
-    const existingIds = questions.map(q=>q.id)
-    const maxId = Math.max(...existingIds)
-    const newQuestion ={
-        id: questions.length ? maxId + 1:1, 
-        question, answer
-    }
-    questions.push(newQuestion);
+    const newQuestion = await prisma.question.create({
+        data: { 
+            question: question, 
+            answer: answer
+        }
+    }); 
+   
     res.status(201).json(newQuestion);
 });
 
 //  PUT /api/questions/:questId
-router.put("/:questId", (req,res) => {
+router.put("/:questId", async (req,res) => {
     const questId = Number(req.params.questId);
-    const questionEdit = questions.find(q=>q.id === questId);
-    if(!questionEdit){
+    const questExist = await prisma.question.findUnique({ where: { id: questId } });
+    if(!questExist){
         return res.status(404).json({msg: "Question not found"})
     }
 
@@ -48,25 +53,31 @@ router.put("/:questId", (req,res) => {
         return res.status(400).json({msg: "Question and answer are required"})
     }
 
-    questionEdit.question = question;
-    questionEdit.answer = answer;
-    res.json(questionEdit); 
+    const questionUpdate = await prisma.question.update({
+    where: { id: questId },
+    data: {
+        question: question, 
+        answer: answer
+    }
+    });
+    
+    res.json(questionUpdate); 
     
 });
 
 //  DELETE /api/questions/:questId
-router.delete("/:questId", (req,res) => {
+router.delete("/:questId", async (req,res) => {
     const questId = Number(req.params.questId);
-    const questIndex = questions.findIndex (q=>q.id === questId);
+    const questExist = await prisma.question.findUnique({ where: { id: questId } });
     
-    if(questIndex === -1){
+    if(!questExist){
         return res.status(404).json({msg: "Question not found"})
     }
 
-    const deletedQuestion = questions.splice(questIndex, 1 );
+    await prisma.question.delete({ where: { id: questId } });
     res.json({
         msg: "Question deleted successfully",
-        post: deletedQuestion
+        post: questExist
 
     })
 })
