@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require("../lib/prisma");
+const authenticate = require("../middleware/auth");
+const isOwner = require("../middleware/isOwner");
+
+router.use(authenticate);
 
 //  GET /api/questions
 router.get("/", async (req, res) => {
@@ -23,8 +27,9 @@ router.get("/:questId", async (req,res) => {
     res.json(question);
 });
 
+// Create new question
 // POST /api/questions
-router.post("/", async (req,res) => {
+router.post("/", async (req,res) => {  
     const {question, answer} = req.body;
     if(!question || !answer){
         return res.status(400).json({msg: "Question and answer are required"})
@@ -33,7 +38,8 @@ router.post("/", async (req,res) => {
     const newQuestion = await prisma.question.create({
         data: { 
             question: question, 
-            answer: answer
+            answer: answer,
+            userId: req.user.userId
         }
     }); 
    
@@ -41,7 +47,7 @@ router.post("/", async (req,res) => {
 });
 
 //  PUT /api/questions/:questId
-router.put("/:questId", async (req,res) => {
+router.put("/:questId", isOwner, async (req,res) => {
     const questId = Number(req.params.questId);
     const questExist = await prisma.question.findUnique({ where: { id: questId } });
     if(!questExist){
@@ -66,7 +72,7 @@ router.put("/:questId", async (req,res) => {
 });
 
 //  DELETE /api/questions/:questId
-router.delete("/:questId", async (req,res) => {
+router.delete("/:questId", isOwner, async (req,res) => {
     const questId = Number(req.params.questId);
     const questExist = await prisma.question.findUnique({ where: { id: questId } });
     

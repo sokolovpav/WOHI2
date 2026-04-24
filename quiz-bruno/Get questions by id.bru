@@ -5,7 +5,11 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/3
+  url: {{baseUrl}}/questions/3
   body: none
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsImlhdCI6MTc3NzAxNzU0NSwiZXhwIjoxNzc3MDIxMTQ1fQ.kbJEG_9NQQK1Da0AhJz9cMEEYA0rl-go1u-W6l7y4nQ
 }
