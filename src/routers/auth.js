@@ -31,7 +31,7 @@ router.post("/register", async (req, res) => {
   });
 
   // Generate a token
-  const token = jwt.sign({ userId: user.id }, SECRET, { expiresIn: "1h" });
+  const token = jwt.sign({ userId: user.id }, SECRET, { expiresIn: "24h" });
 
   res.status(201).json({
     message: "User registered successfully",

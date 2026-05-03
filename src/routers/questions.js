@@ -4,21 +4,54 @@ const prisma = require("../lib/prisma");
 const authenticate = require("../middleware/auth");
 const isOwner = require("../middleware/isOwner");
 
+function formatQuestion(question){
+    return{
+        ...question,
+        question: question.question,
+        answer: question.answer,
+        userName: question.user ? question.user.name : null,
+        user: undefined
+    };
+}
+
+    // "id": 6,
+    // "question": "What color do you get when you mix blue and yellow?",
+    // "answer": "Green",
+    // "userId": 2,
+
 router.use(authenticate);
 
-//  GET /api/questions
+//  GET /api/questions?page=1&limit=5
 router.get("/", async (req, res) => {
-    const questions = await prisma.question.findMany({
+        
+    const page = Math.max(1, parseInt(req.query.page));
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit)|| 5 ));
+
+    const skip = (page - 1) * limit;
+    
+    const [questions, total] = await Promise.all([prisma.question.findMany({
       orderBy: { id: "asc" },
+      include: {user: true},
+      skip,
+      take: limit
+        }), prisma.question.count()]);
+    
+    res.json({
+        data: questions.map(formatQuestion),
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
     });
-    res.json(questions);
+    // res.json();
 });
 
 //  GET /api/questions/:questId
 router.get("/:questId", async (req,res) => {
     const questId = Number(req.params.questId);
     const question = await prisma.question.findUnique({
-    where: { id: questId }
+    where: { id: questId },
+    include: {user: true},
   });
 
     if(!question){
@@ -61,6 +94,7 @@ router.put("/:questId", isOwner, async (req,res) => {
 
     const questionUpdate = await prisma.question.update({
     where: { id: questId },
+    include: {user: true},
     data: {
         question: question, 
         answer: answer
@@ -74,7 +108,10 @@ router.put("/:questId", isOwner, async (req,res) => {
 //  DELETE /api/questions/:questId
 router.delete("/:questId", isOwner, async (req,res) => {
     const questId = Number(req.params.questId);
-    const questExist = await prisma.question.findUnique({ where: { id: questId } });
+    const questExist = await prisma.question.findUnique({ 
+        where: { id: questId },
+        include: {user: true},
+    });
     
     if(!questExist){
         return res.status(404).json({msg: "Question not found"})
