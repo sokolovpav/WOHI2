@@ -33,6 +33,7 @@ model Question {
   user     User @relation(fields: [userId], references: [id])
   attempts Attempt[]
   solvedBy SolvedQuestion[]
+  keywords Keyword[]
   @@map("questions")
 }
 
@@ -53,10 +54,15 @@ model SolvedQuestion {
   questionId Int
   userId     Int
   solvedAt   DateTime @default(now())
-  
   question   Question @relation(fields: [questionId], references: [id])
   user       User     @relation(fields: [userId], references: [id])
-  
   @@unique([questionId, userId])
   @@map("solved_questions")
+}
+
+model Keyword {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique @db.VarChar(100)
+  questions Question[]
+  @@map("keywords")
 }

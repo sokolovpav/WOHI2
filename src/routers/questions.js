@@ -23,11 +23,10 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
 });
 
-
-
 function formatQuestion(question){
     return{
         ...question,
+        keywords: question.keywords ? question.keywords.map((k) => k.name) : [],
         question: question.question,
         answer: question.answer,
         userName: question.user ? question.user.name : null,
@@ -35,12 +34,22 @@ function formatQuestion(question){
     };
 }
 
-    // "id": 6,
-    // "question": "What color do you get when you mix blue and yellow?",
-    // "answer": "Green",
-    // "userId": 2,
+function parseKeywords(keywords) {
+  if (Array.isArray(keywords)) return keywords;
+
+  if (typeof keywords === "string") {
+    return keywords
+      .split(",")
+      .map((k) => k.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
 
 router.use(authenticate);
+
+
 
 //  GET /api/questions?page=1&limit=5
 router.get("/", async (req, res) => {
@@ -50,9 +59,14 @@ router.get("/", async (req, res) => {
     const userId = req.user.userId;
 
     const skip = (page - 1) * limit;
+    const { keyword } = req.query;
+    const where = keyword
+      ? { keywords: { some: { name: keyword } } }
+      : {};
     
     const [questions, total] = await Promise.all([
     prisma.question.findMany({
+      where,
       orderBy: { id: "asc" },
       include: {
         user: true,
@@ -70,7 +84,7 @@ router.get("/", async (req, res) => {
       skip,
       take: limit
     }),
-    prisma.question.count()
+    prisma.question.count({where})
   ]);
 
     // Add the number of attempts to each question
@@ -110,6 +124,7 @@ router.get("/:questId", async (req, res) => {
     where: { id: questId },
     include: {
       user: true,
+      keywords: true,
       attempts: {
         where: {
           userId: userId
@@ -162,19 +177,27 @@ router.get("/:questId", async (req, res) => {
 // Create new question
 // POST /api/questions
 router.post("/", upload.single("image"), async (req,res) => {  
-    const {question, answer} = req.body;
+    const {question, answer, keywords} = req.body;
     if(!question || !answer){
         return res.status(400).json({msg: "Question and answer are required"})
     }
 
     const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    const keywordsArray = parseKeywords(keywords);
+    
     const newQuestion = await prisma.question.create({
         data: { 
             question: question, 
             answer: answer,
             userId: req.user.userId,
-            imageUrl
-        }
+            imageUrl,
+            keywords: {
+                connectOrCreate: keywordsArray.map((kw) => ({
+                where: { name: kw },
+                create: { name: kw },
+                })),  
+            },
+        },   include: { keywords: true, user: true }, 
     }); 
    
     res.status(201).json(newQuestion);
@@ -189,20 +212,29 @@ router.put("/:questId", isOwner, upload.single("image"), async (req,res) => {
     }
     
 
-    const {question, answer} = req.body;
+    const {question, answer, keywords} = req.body;
+    const keywordsArray = parseKeywords(keywords);
+
     if(!question || !answer){
         return res.status(400).json({msg: "Question and answer are required"})
     }
     const imageUrl = req.file ? `/uploads/${req.file.filename}` : questExist.imageUrl;
   
     const questionUpdate = await prisma.question.update({
-    where: { id: questId },
-    include: {user: true}, 
-    data: {
-        question: question, 
-        answer: answer,
-        imageUrl
-    }
+        where: { id: questId },
+        include: {user: true, keywords: true}, 
+        data: {
+            question: question, 
+            answer: answer,
+            imageUrl,
+            keywords: {
+            set: [],
+            connectOrCreate: keywordsArray.map((kw) => ({
+            where: { name: kw },
+            create: { name: kw },
+            })),
+        },    
+        }
     });
     
     res.json(questionUpdate); 
@@ -264,7 +296,7 @@ router.post("/:questId/play", async (req, res) => {
 
   // If the answer is correct, update the “solved” field for the question
   if (isCorrect) {
-    // Проверяем, не решил ли пользователь уже этот вопрос
+    // if the user has already resolved this quiz
     const alreadySolved = await prisma.solvedQuestion.findUnique({
       where: {
         questionId_userId: {
