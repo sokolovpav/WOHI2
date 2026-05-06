@@ -18,6 +18,7 @@ model User {
   password String @db.VarChar(255)
   name     String @db.VarChar(100)
   questions    Question[]
+  attempts  Attempt[]
   @@map("users")
 }
 
@@ -30,5 +31,20 @@ model Question {
   userId   Int
   solved Boolean   @default(false)
   user     User @relation(fields: [userId], references: [id])
+  attempts Attempt[]
   @@map("questions")
+}
+
+model Attempt {
+  id         Int      @id @default(autoincrement())
+  questionId Int
+  userId     Int
+  answer     String   @db.Text
+  isCorrect  Boolean
+  createdAt  DateTime @default(now())
+  
+  question   Question @relation(fields: [questionId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+  
+  @@map("attempts")
 }

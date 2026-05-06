@@ -152,4 +152,57 @@ router.delete("/:questId", isOwner, async (req,res) => {
     })
 })
 
+// POST /api/questions/:questId/play
+router.post("/:questId/play", async (req, res) => {
+  const questId = Number(req.params.questId);
+  const { answer } = req.body;
+  const userId = req.user.userId;
+
+  // Checking if the question exists
+  const question = await prisma.question.findUnique({
+    where: { id: questId },
+  });
+
+  if (!question) {
+    return res.status(404).json({ msg: "Question not found" });
+  }
+
+  // Check if an empty response was sent
+  if (!answer || answer.trim() === "") {
+    return res.status(400).json({ msg: "Answer is required" });
+  }
+
+  // Compare the answers (ignoring case, removing spaces)
+  const isCorrect = answer.trim().toLowerCase() === question.answer.trim().toLowerCase();
+
+  // Save the attempt to the database
+  const attempt = await prisma.attempt.create({
+    data: {
+      questionId: questId,
+      userId: userId,
+      answer: answer.trim(),
+      isCorrect: isCorrect,
+    },
+  });
+
+  // If the answer is correct, update the “solved” field for the question
+  if (isCorrect) {
+    await prisma.question.update({
+      where: { id: questId },
+      data: { solved: true },
+    });
+  }
+
+  // Format the date
+  const formattedDate = attempt.createdAt.toISOString().replace('T', ' ').substring(0, 19);
+
+  res.json({
+    id: attempt.id,
+    correct: isCorrect,
+    submittedAnswer: attempt.answer,
+    correctAnswer: question.answer,
+    createdAt: formattedDate,
+  });
+});
+
 module.exports = router;
