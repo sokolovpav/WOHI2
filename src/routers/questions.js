@@ -52,13 +52,35 @@ router.get("/", async (req, res) => {
     
     const [questions, total] = await Promise.all([prisma.question.findMany({
       orderBy: { id: "asc" },
-      include: {user: true},
+      include: {user: true,
+        attempts: {
+          select: {
+            isCorrect: true,
+            userId: true
+          }
+        }
+      },
       skip,
       take: limit
         }), prisma.question.count()]);
+
+    // Добавляем количество попыток к каждому вопросу
+    const questionsWithAttempts = questions.map(question => {
+    const totalAttempts = question.attempts.length;
+    const userAttempts = question.attempts.filter(a => a.userId === req.user.userId).length;
+    const correctAttempts = question.attempts.filter(a => a.userId === req.user.userId && a.isCorrect).length;
+    
+    return {
+      ...formatQuestion(question),
+      attemptsCount: totalAttempts,
+      userAttemptsCount: userAttempts,
+      userCorrectAttempts: correctAttempts
+    };
+    });
     
     res.json({
-        data: questions.map(formatQuestion),
+        // data: questions.map(formatQuestion),
+        data: questionsWithAttempts,
         page,
         limit,
         total,
@@ -68,18 +90,51 @@ router.get("/", async (req, res) => {
 });
 
 //  GET /api/questions/:questId
-router.get("/:questId", async (req,res) => {
-    const questId = Number(req.params.questId);
-    const question = await prisma.question.findUnique({
+router.get("/:questId", async (req, res) => {
+  const questId = Number(req.params.questId);
+  const question = await prisma.question.findUnique({
     where: { id: questId },
-    include: {user: true},
+    include: {
+      user: true,
+      attempts: {
+        where: {
+          userId: req.user.userId
+        },
+        orderBy: {
+          createdAt: 'desc'
+        },
+        take: 10 // последние 10 попыток
+      }
+    },
   });
 
-    if(!question){
-        return res.status(404).json({msg: "Question not found"})
+  if (!question) {
+    return res.status(404).json({ msg: "Question not found" });
+  }
+
+  const totalAttemptsForUser = await prisma.attempt.count({
+    where: {
+      questionId: questId,
+      userId: req.user.userId
     }
-    // res.json(question);
-    res.json(formatQuestion(question));
+  });
+
+  const correctAttemptsForUser = await prisma.attempt.count({
+    where: {
+      questionId: questId,
+      userId: req.user.userId,
+      isCorrect: true
+    }
+  });
+
+  const formattedQuestion = {
+    ...formatQuestion(question),
+    attemptsCount: totalAttemptsForUser,
+    correctAttemptsCount: correctAttemptsForUser,
+    lastAttempts: question.attempts
+  };
+
+  res.json(formattedQuestion);
 });
 
 // Create new question

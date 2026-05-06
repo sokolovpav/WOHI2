@@ -158,6 +158,15 @@ async function loadQuestions(keyword = "", page = 1) {
             <a href="#" class="question-link" data-id="${q.id}">${q.question}</a>
             ${q[CONFIG.API_FIELDS.SOLVED] ? `<span class="badge-solved">Solved</span>` : ""}
           </h3>
+          <div class="attempts-stats">
+            <span class="attempts-badge" title="Total attempts on this question">
+              📊 Total: ${q.attemptsCount || 0}
+            </span>
+            <span class="attempts-badge" title="Your attempts">
+              🎯 Your attempts: ${q.userAttemptsCount || 0}
+            </span>
+            ${q.userCorrectAttempts > 0 ? `<span class="attempts-badge correct">✅ Correct: ${q.userCorrectAttempts}</span>` : ''}
+          </div>
           ${
             q.keywords && q.keywords.length
               ? `<div class="question-keywords">${q.keywords.map((k) => `<span class="keyword">${k}</span>`).join("")}</div>`
@@ -249,6 +258,22 @@ async function loadQuestionDetail(qId) {
     const currentUserId = getCurrentUserId();
     const isOwner = q.userId === currentUserId;
 
+    let attemptsHistory = '';
+    if (q.lastAttempts && q.lastAttempts.length > 0) {
+      attemptsHistory = `
+        <div class="attempts-history">
+          <h4>Your recent attempts (${q.attemptsCount} total, ${q.correctAttemptsCount} correct)</h4>
+          ${q.lastAttempts.map(attempt => `
+            <div class="attempt-item ${attempt.isCorrect ? 'correct' : 'incorrect'}">
+              ${new Date(attempt.createdAt).toLocaleString()}: 
+              ${attempt.isCorrect ? '✓ Correct' : '✗ Incorrect'} 
+              (Answer: "${attempt.answer}")
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
     container.innerHTML = `
       <a href="#" id="back-btn" class="back-link">&larr; Back to questions</a>
       <article class="question-card question-detail">
@@ -261,6 +286,7 @@ async function loadQuestionDetail(qId) {
             ? `<div class="question-keywords">${q.keywords.map((k) => `<span class="keyword">${k}</span>`).join("")}</div>`
             : ""
         }
+        ${attemptsHistory}
         ${
           isOwner
             ? `<div class="question-actions detail-actions">
