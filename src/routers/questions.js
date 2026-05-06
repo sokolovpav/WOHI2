@@ -47,40 +47,52 @@ router.get("/", async (req, res) => {
         
     const page = Math.max(1, parseInt(req.query.page));
     const limit = Math.max(1, Math.min(100, parseInt(req.query.limit)|| 5 ));
+    const userId = req.user.userId;
 
     const skip = (page - 1) * limit;
     
-    const [questions, total] = await Promise.all([prisma.question.findMany({
+    const [questions, total] = await Promise.all([
+    prisma.question.findMany({
       orderBy: { id: "asc" },
-      include: {user: true,
+      include: {
+        user: true,
         attempts: {
-          select: {
-            isCorrect: true,
-            userId: true
+          where: {
+            userId: userId
+          }
+        },
+        solvedBy: {
+          where: {
+            userId: userId
           }
         }
       },
       skip,
       take: limit
-        }), prisma.question.count()]);
+    }),
+    prisma.question.count()
+  ]);
 
-    // Добавляем количество попыток к каждому вопросу
-    const questionsWithAttempts = questions.map(question => {
-    const totalAttempts = question.attempts.length;
-    const userAttempts = question.attempts.filter(a => a.userId === req.user.userId).length;
-    const correctAttempts = question.attempts.filter(a => a.userId === req.user.userId && a.isCorrect).length;
+    // Add the number of attempts to each question
+    const questionsWithUserData = questions.map(question => {
+    const isSolvedByUser = question.solvedBy.length > 0;
+    const userAttempts = question.attempts;
+    const correctAttempts = userAttempts.filter(a => a.isCorrect).length;
+    
     
     return {
       ...formatQuestion(question),
-      attemptsCount: totalAttempts,
-      userAttemptsCount: userAttempts,
-      userCorrectAttempts: correctAttempts
+      solved: isSolvedByUser, // solved
+      attemptsCount: userAttempts.length,
+      
+      userCorrectAttempts: correctAttempts,
+    //   lastAttempt: userAttempts[userAttempts.length - 1]?.createdAt || null
     };
     });
     
     res.json({
         // data: questions.map(formatQuestion),
-        data: questionsWithAttempts,
+        data: questionsWithUserData,
         page,
         limit,
         total,
@@ -92,18 +104,25 @@ router.get("/", async (req, res) => {
 //  GET /api/questions/:questId
 router.get("/:questId", async (req, res) => {
   const questId = Number(req.params.questId);
+  const userId = req.user.userId;
+
   const question = await prisma.question.findUnique({
     where: { id: questId },
     include: {
       user: true,
       attempts: {
         where: {
-          userId: req.user.userId
+          userId: userId
         },
         orderBy: {
           createdAt: 'desc'
         },
-        take: 10 // последние 10 попыток
+        take: 10
+      },
+      solvedBy: {
+        where: {
+          userId: userId
+        }
       }
     },
   });
@@ -115,20 +134,23 @@ router.get("/:questId", async (req, res) => {
   const totalAttemptsForUser = await prisma.attempt.count({
     where: {
       questionId: questId,
-      userId: req.user.userId
+      userId: userId
     }
   });
 
   const correctAttemptsForUser = await prisma.attempt.count({
     where: {
       questionId: questId,
-      userId: req.user.userId,
+      userId: userId,
       isCorrect: true
     }
   });
 
+  const isSolvedByUser = question.solvedBy.length > 0;
+
   const formattedQuestion = {
     ...formatQuestion(question),
+    solved: isSolvedByUser,
     attemptsCount: totalAttemptsForUser,
     correctAttemptsCount: correctAttemptsForUser,
     lastAttempts: question.attempts
@@ -242,10 +264,24 @@ router.post("/:questId/play", async (req, res) => {
 
   // If the answer is correct, update the “solved” field for the question
   if (isCorrect) {
-    await prisma.question.update({
-      where: { id: questId },
-      data: { solved: true },
+    // Проверяем, не решил ли пользователь уже этот вопрос
+    const alreadySolved = await prisma.solvedQuestion.findUnique({
+      where: {
+        questionId_userId: {
+          questionId: questId,
+          userId: userId
+        }
+      }
     });
+
+    if (!alreadySolved) {
+      await prisma.solvedQuestion.create({
+        data: {
+          questionId: questId,
+          userId: userId,
+        },
+      });
+    }
   }
 
   // Format the date

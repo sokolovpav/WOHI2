@@ -19,6 +19,7 @@ model User {
   name     String @db.VarChar(100)
   questions    Question[]
   attempts  Attempt[]
+  solvedQuestions SolvedQuestion[]
   @@map("users")
 }
 
@@ -29,9 +30,9 @@ model Question {
   answer   String    @db.Text
   imageUrl  String? @db.VarChar(255)
   userId   Int
-  solved Boolean   @default(false)
   user     User @relation(fields: [userId], references: [id])
   attempts Attempt[]
+  solvedBy SolvedQuestion[]
   @@map("questions")
 }
 
@@ -42,9 +43,20 @@ model Attempt {
   answer     String   @db.Text
   isCorrect  Boolean
   createdAt  DateTime @default(now())
+  question   Question @relation(fields: [questionId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+  @@map("attempts")
+}
+
+model SolvedQuestion {
+  id         Int      @id @default(autoincrement())
+  questionId Int
+  userId     Int
+  solvedAt   DateTime @default(now())
   
   question   Question @relation(fields: [questionId], references: [id])
   user       User     @relation(fields: [userId], references: [id])
   
-  @@map("attempts")
+  @@unique([questionId, userId])
+  @@map("solved_questions")
 }
