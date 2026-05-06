@@ -5,9 +5,14 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/questions
+  url: {{baseUrl}}/questions?page=2&limit=2
   body: none
   auth: bearer
+}
+
+params:query {
+  page: 2
+  limit: 2
 }
 
 auth:bearer {

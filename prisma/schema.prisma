@@ -26,7 +26,9 @@ model Question {
   id       Int       @id @default(autoincrement())
   question String    @db.Text
   answer   String    @db.Text
+  imageUrl  String? @db.VarChar(255)
   userId   Int
+  solved Boolean   @default(false)
   user     User @relation(fields: [userId], references: [id])
   @@map("questions")
 }

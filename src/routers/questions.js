@@ -3,6 +3,27 @@ const router = express.Router();
 const prisma = require("../lib/prisma");
 const authenticate = require("../middleware/auth");
 const isOwner = require("../middleware/isOwner");
+const multer = require("multer");
+const path = require('path');
+
+const storage = multer.diskStorage({
+  destination: path.join(__dirname, "..", "..", "public", "uploads"),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) cb(null, true);
+    else cb(new Error("Only image files are allowed"));
+  },
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
+
+
 
 function formatQuestion(question){
     return{
@@ -57,22 +78,25 @@ router.get("/:questId", async (req,res) => {
     if(!question){
         return res.status(404).json({msg: "Question not found"})
     }
-    res.json(question);
+    // res.json(question);
+    res.json(formatQuestion(question));
 });
 
 // Create new question
 // POST /api/questions
-router.post("/", async (req,res) => {  
+router.post("/", upload.single("image"), async (req,res) => {  
     const {question, answer} = req.body;
     if(!question || !answer){
         return res.status(400).json({msg: "Question and answer are required"})
     }
 
+    const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
     const newQuestion = await prisma.question.create({
         data: { 
             question: question, 
             answer: answer,
-            userId: req.user.userId
+            userId: req.user.userId,
+            imageUrl
         }
     }); 
    
@@ -80,24 +104,27 @@ router.post("/", async (req,res) => {
 });
 
 //  PUT /api/questions/:questId
-router.put("/:questId", isOwner, async (req,res) => {
+router.put("/:questId", isOwner, upload.single("image"), async (req,res) => {
     const questId = Number(req.params.questId);
     const questExist = await prisma.question.findUnique({ where: { id: questId } });
     if(!questExist){
         return res.status(404).json({msg: "Question not found"})
     }
+    
 
     const {question, answer} = req.body;
     if(!question || !answer){
         return res.status(400).json({msg: "Question and answer are required"})
     }
-
+    const imageUrl = req.file ? `/uploads/${req.file.filename}` : questExist.imageUrl;
+  
     const questionUpdate = await prisma.question.update({
     where: { id: questId },
-    include: {user: true},
+    include: {user: true}, 
     data: {
         question: question, 
-        answer: answer
+        answer: answer,
+        imageUrl
     }
     });
     
