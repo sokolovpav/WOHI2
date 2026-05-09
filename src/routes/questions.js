@@ -5,6 +5,16 @@ const authenticate = require("../middleware/auth");
 const isOwner = require("../middleware/isOwner");
 const multer = require("multer");
 const path = require('path');
+const {NotFoundError,ValidationError} = require('../lib/errors');
+const { z } = require("zod");
+
+const QuestInput = z.object({
+  question: z.string().min(1),
+  answer: z.string().min(1),
+  keywords: z.union([z.string(), z.array(z.string())]).optional(),
+});
+
+
 
 const storage = multer.diskStorage({
   destination: path.join(__dirname, "..", "..", "public", "uploads"),
@@ -18,7 +28,7 @@ const upload = multer({
   storage,
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith("image/")) cb(null, true);
-    else cb(new Error("Only image files are allowed"));
+    else cb(new ValidationError("Only image files are allowed"));
   },
   limits: { fileSize: 5 * 1024 * 1024 },
 });
@@ -49,6 +59,13 @@ function parseKeywords(keywords) {
 
 router.use(authenticate);
 
+router.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError ||
+      err?.message === "Only image files are allowed") {
+    return res.status(400).json({ msg: err.message });
+  }
+  next(err); // pass through to global handler
+});
 
 
 //  GET /api/questions?page=1&limit=5
@@ -143,7 +160,7 @@ router.get("/:questId", async (req, res) => {
   });
 
   if (!question) {
-    return res.status(404).json({ msg: "Question not found" });
+    throw new NotFoundError("Question not found");
   }
 
   const totalAttemptsForUser = await prisma.attempt.count({
@@ -177,10 +194,9 @@ router.get("/:questId", async (req, res) => {
 // Create new question
 // POST /api/questions
 router.post("/", upload.single("image"), async (req,res) => {  
-    const {question, answer, keywords} = req.body;
-    if(!question || !answer){
-        return res.status(400).json({msg: "Question and answer are required"})
-    }
+    // const {question, answer, keywords} = req.body;
+
+    const {question, answer, keywords} = QuestInput.parse(req.body); // throws ZodError on failure
 
     const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
     const keywordsArray = parseKeywords(keywords);
@@ -200,7 +216,7 @@ router.post("/", upload.single("image"), async (req,res) => {
         },   include: { keywords: true, user: true }, 
     }); 
    
-    res.status(201).json(newQuestion);
+    res.status(201).json(formatQuestion(newQuestion));
 });
 
 //  PUT /api/questions/:questId
@@ -208,15 +224,17 @@ router.put("/:questId", isOwner, upload.single("image"), async (req,res) => {
     const questId = Number(req.params.questId);
     const questExist = await prisma.question.findUnique({ where: { id: questId } });
     if(!questExist){
-        return res.status(404).json({msg: "Question not found"})
+        throw new NotFoundError("Question not found");
     }
     
 
-    const {question, answer, keywords} = req.body;
+    // const {question, answer, keywords} = req.body;
+    const {question, answer, keywords} = QuestInput.parse(req.body);
+
     const keywordsArray = parseKeywords(keywords);
 
     if(!question || !answer){
-        return res.status(400).json({msg: "Question and answer are required"})
+        throw new ValidationError("Question and answer are required");
     }
     const imageUrl = req.file ? `/uploads/${req.file.filename}` : questExist.imageUrl;
   
@@ -237,7 +255,8 @@ router.put("/:questId", isOwner, upload.single("image"), async (req,res) => {
         }
     });
     
-    res.json(questionUpdate); 
+    res.status(201).json(formatQuestion(questionUpdate));
+    // res.json(questionUpdate); 
     
 });
 
@@ -250,7 +269,7 @@ router.delete("/:questId", isOwner, async (req,res) => {
     });
     
     if(!questExist){
-        return res.status(404).json({msg: "Question not found"})
+        throw new NotFoundError("Question not found");
     }
 
     await prisma.question.delete({ where: { id: questId } });
@@ -273,12 +292,12 @@ router.post("/:questId/play", async (req, res) => {
   });
 
   if (!question) {
-    return res.status(404).json({ msg: "Question not found" });
+    throw new NotFoundError("Question not found");
   }
 
   // Check if an empty response was sent
-  if (!answer || answer.trim() === "") {
-    return res.status(400).json({ msg: "Answer is required" });
+  if (!answer || answer.trim() === "") { 
+    throw new ValidationError("Answer is required");
   }
 
   // Compare the answers (ignoring case, removing spaces)
