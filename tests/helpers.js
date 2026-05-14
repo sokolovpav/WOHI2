@@ -3,8 +3,9 @@ const app = require("../src/app");
 const prisma = require("../src/lib/prisma");
 
 async function resetDb() {
-  // await prisma.like.deleteMany();
-  await prisma.question.deleteMany();
+  await prisma.attempt.deleteMany();
+  await prisma.solvedQuestion.deleteMany();
+  await prisma.question.deleteMany();  
   await prisma.keyword.deleteMany();
   await prisma.user.deleteMany();
 }

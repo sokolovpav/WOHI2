@@ -59,14 +59,6 @@ function parseKeywords(keywords) {
 
 router.use(authenticate);
 
-router.use((err, req, res, next) => {
-  if (err instanceof multer.MulterError ||
-      err?.message === "Only image files are allowed") {
-    return res.status(400).json({ msg: err.message });
-  }
-  next(err); // pass through to global handler
-});
-
 
 //  GET /api/questions?page=1&limit=5
 router.get("/", async (req, res) => {
@@ -223,9 +215,9 @@ router.post("/", upload.single("image"), async (req,res) => {
 router.put("/:questId", isOwner, upload.single("image"), async (req,res) => {
     const questId = Number(req.params.questId);
     const questExist = await prisma.question.findUnique({ where: { id: questId } });
-    if(!questExist){
-        throw new NotFoundError("Question not found");
-    }
+    // if(!questExist){
+    //     throw new NotFoundError("Question not found");
+    // }
     
 
     // const {question, answer, keywords} = req.body;
@@ -233,9 +225,9 @@ router.put("/:questId", isOwner, upload.single("image"), async (req,res) => {
 
     const keywordsArray = parseKeywords(keywords);
 
-    if(!question || !answer){
-        throw new ValidationError("Question and answer are required");
-    }
+    // if(!question || !answer){
+    //     throw new ValidationError("Question and answer are required");
+    // }
     const imageUrl = req.file ? `/uploads/${req.file.filename}` : questExist.imageUrl;
   
     const questionUpdate = await prisma.question.update({
@@ -268,9 +260,9 @@ router.delete("/:questId", isOwner, async (req,res) => {
         include: {user: true},
     });
     
-    if(!questExist){
-        throw new NotFoundError("Question not found");
-    }
+    // if(!questExist){
+    //     throw new NotFoundError("Question not found");
+    // }
 
     await prisma.question.delete({ where: { id: questId } });
     res.json({
@@ -345,6 +337,14 @@ router.post("/:questId/play", async (req, res) => {
     correctAnswer: question.answer,
     createdAt: formattedDate,
   });
+});
+
+router.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError ||
+      err?.message === "Only image files are allowed") {
+    return res.status(400).json({ msg: err.message });
+  }
+  next(err); // pass through to global handler
 });
 
 module.exports = router;
